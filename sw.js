@@ -1,6 +1,6 @@
-/* 天天双拼 V13.3 音效版 | 官方站点托管 + Safari 主屏幕 App + 断网可用 */
+/* 天天双拼 V13.4 清爽键盘音版 | 官方站点托管 + Safari 主屏幕 App + 断网可用 */
 const CACHE_PREFIX = 'tiantian-shuangpin-';
-const CACHE_NAME = 'tiantian-shuangpin-v13-3-sound-20261017-v1';
+const CACHE_NAME = 'tiantian-shuangpin-v13-4-keyclick-20261017-v1';
 const CORE = [
   './index.html',
   './manifest.webmanifest',

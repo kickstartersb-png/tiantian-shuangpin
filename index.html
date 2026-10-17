@@ -7,7 +7,7 @@
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">
 <meta name="description" content="天天双拼：适合长辈的小鹤双拼练习，12幅静态高清山水画，大字、键盘提示、进度备份。">
-<title>天天双拼 · V13.3 音效精修版</title>
+<title>天天双拼 · V13.4 清爽键盘音版</title>
 <style>
 :root{color-scheme:light;--ink:#3c2c58;--muted:#706180;--mag:#ff5d9a;--vio:#8055dc;--peach:#ffa66e;--yellow:#ffde6c;--mint:#d6fae7;--line:#ead8ed;--panel:#fff;--scale:1;--sh:0 5px 0 #dec2d7}
 *{box-sizing:border-box}html,body{height:100%;margin:0;overflow:hidden;overscroll-behavior:none;-webkit-text-size-adjust:100%}
@@ -616,10 +616,10 @@ main{padding:7px clamp(10px,1.6vw,20px) 8px!important}
   <div class="font-setting-label"><strong>字体大小</strong><small>重点调整练习汉字、拼音和双拼键帽</small></div><div class="size-row" id="fontOptions" role="group" aria-label="练习字号"></div>
   <div class="setting-grid" id="settingOptions"></div>
   <div class="sound-tuning" id="soundTuning" aria-label="声音音量及试听">
-   <div class="sound-tuning-title"><strong>🔔 音效大小</strong><span>柔和木琴音 · 可直接试听</span></div>
+   <div class="sound-tuning-title"><strong>🔈 按键音量</strong><span>清脆短促，不再播放连续铃声 · 可试听</span></div>
    <div class="sound-controls">
     <div class="sound-levels" id="soundLevels" role="group" aria-label="声音大小"></div>
-    <div class="sound-previews"><button type="button" class="tap" data-preview="ok">♪ 试听按键</button><button type="button" class="tap" data-preview="win">♫ 试听完成</button></div>
+    <div class="sound-previews"><button type="button" class="tap" data-preview="ok">⌨ 试听打字</button><button type="button" class="tap" data-preview="win">♪ 试听完成</button></div>
    </div>
   </div>
   <button type="button" class="backup-entry tap" id="openBackup" aria-label="备份或恢复练习记录"><span>📦 备份 / 恢复练习记录</span><span>离线长期保存 →</span></button>
@@ -765,7 +765,7 @@ function playable(text,py){
 }
 const $=id=>document.getElementById(id);
 const main=$('main'),dock=$('dock'),keyboard=$('keyboard');
-const state={mode:'home',font:'large',hints:true,breakdown:true,labels:true,sounds:true,soundLevel:'loud',rewards:true,folded:false,items:[],item:0,current:null,tokens:[],index:0,typed:'',win:false,message:'按亮起的键开始练习',messageType:'',pickPage:0,celebrate:false,sourceTitle:'',completedSections:[],wordHistory:[],wordHistoryLastId:null,replayTouched:false};
+const state={mode:'home',font:'large',hints:true,breakdown:true,labels:true,sounds:true,soundLevel:'normal',rewards:true,folded:false,items:[],item:0,current:null,tokens:[],index:0,typed:'',win:false,message:'按亮起的键开始练习',messageType:'',pickPage:0,celebrate:false,sourceTitle:'',completedSections:[],wordHistory:[],wordHistoryLastId:null,replayTouched:false};
 try{const old=JSON.parse(localStorage.getItem(WORD_HISTORY_KEY)||'[]');if(Array.isArray(old))state.wordHistory=old.slice(-90);}catch(e){}
 try{
  const saved=JSON.parse(localStorage.getItem('xiaohe-v4-settings')||'{}');
@@ -773,9 +773,11 @@ try{
 }catch(e){}
 function saveSettings(){try{localStorage.setItem('xiaohe-v4-settings',JSON.stringify(Object.fromEntries(['font','hints','breakdown','labels','sounds','soundLevel','rewards'].map(k=>[k,state[k]]))));}catch(e){}}
 function esc(s){return String(s??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));}
-let audio=null, audioMaster=null;
-const SOUND_LEVELS={soft:.36,normal:.67,loud:1.0};
-// Web Audio sounds are generated locally: no external audio files, downloads or tracking.
+let audio=null, audioMaster=null, keyboardClickBuffer=null, wrongClickBuffer=null;
+const SOUND_LEVELS={soft:.43,normal:.70,loud:1.0};
+// Soft, short synthesized physical key taps inspired by iPad typing sounds.
+// This is our own sound design, not an Apple system audio recording.
+// No audio files, network requests, long tones, reverberation, or echo.
 function getAudio(){
  if(!state.sounds)return null;
  try{
@@ -784,67 +786,73 @@ function getAudio(){
   if(!audio){
    audio=new AC();
    audioMaster=audio.createGain();
-   const compressor=audio.createDynamicsCompressor();
-   compressor.threshold.value=-13;
-   compressor.knee.value=14;
-   compressor.ratio.value=3.2;
-   compressor.attack.value=.004;
-   compressor.release.value=.17;
-   audioMaster.connect(compressor);
-   compressor.connect(audio.destination);
-   // A very quiet, single room reflection softens sharp digital edges.
-   const echo=audio.createDelay(.22),echoVol=audio.createGain();
-   echo.delayTime.value=.102;
-   echoVol.gain.value=.075;
-   audioMaster.connect(echo);
-   echo.connect(echoVol);
-   echoVol.connect(compressor);
+   audioMaster.gain.value=SOUND_LEVELS[state.soundLevel]??SOUND_LEVELS.normal;
+   audioMaster.connect(audio.destination);
   }
-  const level=SOUND_LEVELS[state.soundLevel]??SOUND_LEVELS.loud;
-  audioMaster.gain.setTargetAtTime(level,audio.currentTime,.012);
+  audioMaster.gain.setTargetAtTime(SOUND_LEVELS[state.soundLevel]??SOUND_LEVELS.normal,audio.currentTime,.018);
   if(audio.state==='suspended')audio.resume().catch(()=>{});
   return audio;
  }catch(e){return null;}
 }
-function mallet(freq,delay=0,duration=.27,strength=.26){
+function buildKeyTapBuffer(ctx,muted=false){
+ const sr=ctx.sampleRate,length=Math.ceil(sr*.055),buffer=ctx.createBuffer(1,length,sr),data=buffer.getChannelData(0);
+ let seed=muted?2048:93217,prev=0,smooth=0;
+ for(let i=0;i<length;i++){
+  const t=i/sr;
+  // Tiny low-pitched wooden body + dry, filtered tactile impact.
+  seed=(1664525*seed+1013904223)>>>0;
+  const n=seed/2147483648-1;
+  smooth=smooth*.75+n*.25;
+  const dry=n-smooth;
+  const onset=1-Math.exp(-t/.0006);
+  const impact=onset*Math.exp(-t/(muted?.006:.0086));
+  const body=Math.sin(2*Math.PI*(muted?620:1080)*t)*Math.exp(-t/.014);
+  const softBody=Math.sin(2*Math.PI*(muted?320:570)*t)*Math.exp(-t/.018);
+  const value=(dry*.38*impact+body*.23*impact+softBody*.16*onset*Math.exp(-t/.015));
+  data[i]=Math.max(-.86,Math.min(.86,value));
+ }
+ return buffer;
+}
+function keyTap(muted=false){
  const ctx=getAudio();if(!ctx)return;
  try{
-  const start=ctx.currentTime+Math.max(0,delay)+.008;
-  const end=start+Math.max(.11,duration);
-  const low=ctx.createOscillator(),high=ctx.createOscillator();
-  const body=ctx.createGain(),sparkle=ctx.createGain();
-  low.type='sine';high.type='sine';
-  low.frequency.setValueAtTime(freq*1.004,start);
-  low.frequency.exponentialRampToValueAtTime(freq,start+.045);
-  high.frequency.setValueAtTime(freq*2.005,start);
-  body.gain.setValueAtTime(.0001,start);
-  body.gain.linearRampToValueAtTime(strength,start+.012);
-  body.gain.exponentialRampToValueAtTime(strength*.38,start+.095);
-  body.gain.exponentialRampToValueAtTime(.0001,end);
-  sparkle.gain.setValueAtTime(.0001,start);
-  sparkle.gain.linearRampToValueAtTime(strength*.14,start+.006);
-  sparkle.gain.exponentialRampToValueAtTime(.0001,start+Math.min(duration*.6,.16));
-  low.connect(body);high.connect(sparkle);
-  body.connect(audioMaster);sparkle.connect(audioMaster);
-  low.start(start);high.start(start);
-  low.stop(end+.01);high.stop(start+Math.min(duration*.6,.16)+.01);
-  low.onended=()=>{low.disconnect();high.disconnect();body.disconnect();sparkle.disconnect();};
+  if(!keyboardClickBuffer)keyboardClickBuffer=buildKeyTapBuffer(ctx);
+  if(!wrongClickBuffer)wrongClickBuffer=buildKeyTapBuffer(ctx,true);
+  const src=ctx.createBufferSource(),gain=ctx.createGain();
+  src.buffer=muted?wrongClickBuffer:keyboardClickBuffer;
+  // Very slight natural variation, not changing the identifiable click sound.
+  src.playbackRate.value=muted?.95:(.988+Math.random()*.024);
+  gain.gain.value=muted?.27:.49;
+  src.connect(gain);gain.connect(audioMaster);
+  src.start(ctx.currentTime);
+  src.onended=()=>{src.disconnect();gain.disconnect();};
  }catch(e){}
+}
+function gentleFinish(){
+ const ctx=getAudio();if(!ctx)return;
+ const at=ctx.currentTime+.095;
+ // Two unobtrusive notes, only when a whole phrase is completed.
+ for(const [freq,offset,duration,volume] of [[587.33,0,.19,.053],[783.99,.14,.24,.060]]){
+  try{
+   const osc=ctx.createOscillator(),vol=ctx.createGain();
+   osc.type='sine';osc.frequency.value=freq;
+   const t=at+offset,end=t+duration;
+   vol.gain.setValueAtTime(.0001,t);
+   vol.gain.linearRampToValueAtTime(volume,t+.017);
+   vol.gain.exponentialRampToValueAtTime(volume*.28,t+.095);
+   vol.gain.exponentialRampToValueAtTime(.0001,end);
+   osc.connect(vol);vol.connect(audioMaster);
+   osc.start(t);osc.stop(end+.015);
+   osc.onended=()=>{osc.disconnect();vol.disconnect();};
+  }catch(e){}
+ }
 }
 function play(kind){
  if(!state.sounds)return;
- // Pleasant pentatonic notes; each action is recognizable without a piercing alarm.
- if(kind==='ok')mallet(659.25,0,.17,.21);
- else if(kind==='letter'){
-  mallet(659.25,0,.22,.20);
-  mallet(880,.094,.30,.23);
- }else if(kind==='win'){
-  mallet(523.25,0,.34,.22);
-  mallet(659.25,.12,.35,.24);
-  mallet(783.99,.24,.40,.24);
-  mallet(1046.5,.38,.58,.28);
- }else if(kind==='bad')mallet(293.66,0,.18,.19);
- else mallet(783.99,0,.12,.14);
+ if(kind==='ok'||kind==='letter')keyTap();
+ else if(kind==='win'){keyTap();gentleFinish();}
+ else if(kind==='bad')keyTap(true);
+ // Navigation/settings taps stay silent to avoid a noisy interface.
 }
 let toastTimer=null;
 function toast(s){const t=$('toast');t.textContent=s;t.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),1350);}
@@ -1205,7 +1213,7 @@ function render(){
 }
 function renderSettings(){
  $('fontOptions').innerHTML=[['normal','标准','清晰日常'],['large','大','舒适醒目'],['xlarge','超大','重点放大']].map(([key,title,subtitle])=>`<button type="button" class="size-choice tap ${state.font===key?'chosen':''}" data-font="${key}" aria-pressed="${state.font===key}" aria-label="${title}字号，${subtitle}"><span class="font-glyph font-${key}" aria-hidden="true">字</span><span class="font-copy"><strong>${title}</strong><small>${subtitle}</small></span><span class="font-check" aria-hidden="true">✓</span></button>`).join('');
- $('settingOptions').innerHTML=[['hints','提示高亮','金黄色提示下一步按键'],['breakdown','详细说明','分别解释第一键和第二键'],['labels','完整键帽标记','每个键显示声母及韵母'],['sounds','按键声音','柔和木琴音：按键、完成、错误提示'],['rewards','奖励反馈','字完成显示确认及星星']].map(([key,title,desc])=>`<button class="setting-tile tap" data-setting="${key}" aria-pressed="${state[key]}"><b>${title}</b><span class="desc">${desc}</span><span class="status">${state[key]?'● 已开启':'○ 已关闭'}</span></button>`).join('');
+ $('settingOptions').innerHTML=[['hints','提示高亮','金黄色提示下一步按键'],['breakdown','详细说明','分别解释第一键和第二键'],['labels','完整键帽标记','每个键显示声母及韵母'],['sounds','按键声音','仿 iPad 的短促敲击声；完成时轻柔提示'],['rewards','奖励反馈','字完成显示确认及星星']].map(([key,title,desc])=>`<button class="setting-tile tap" data-setting="${key}" aria-pressed="${state[key]}"><b>${title}</b><span class="desc">${desc}</span><span class="status">${state[key]?'● 已开启':'○ 已关闭'}</span></button>`).join('');
  $('soundLevels').innerHTML=[['soft','轻柔'],['normal','适中'],['loud','响亮']].map(([key,title])=>`<button type="button" class="tap ${state.soundLevel===key?'selected':''}" data-volume="${key}" aria-pressed="${state.soundLevel===key}">${title}</button>`).join('');
  document.querySelectorAll('[data-preview]').forEach(b=>{b.disabled=!state.sounds;});
 }
