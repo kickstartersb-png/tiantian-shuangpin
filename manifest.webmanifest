@@ -1,0 +1,28 @@
+{
+  "id": "./",
+  "name": "天天双拼 · 小鹤双拼练习",
+  "short_name": "天天双拼",
+  "description": "为长辈设计的小鹤双拼：大字练习、静态高清山水、按键音效和本地练习记录",
+  "lang": "zh-CN",
+  "dir": "ltr",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#fffaf2",
+  "theme_color": "#f7f1e7",
+  "icons": [
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
