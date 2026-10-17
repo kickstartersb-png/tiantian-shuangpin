@@ -7,7 +7,7 @@
 <link rel="manifest" href="./manifest.webmanifest">
 <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">
 <meta name="description" content="天天双拼：适合长辈的小鹤双拼练习，12幅静态高清山水画，大字、键盘提示、进度备份。">
-<title>天天双拼 · V13.2 iPad 网页 App</title>
+<title>天天双拼 · V13.3 音效精修版</title>
 <style>
 :root{color-scheme:light;--ink:#3c2c58;--muted:#706180;--mag:#ff5d9a;--vio:#8055dc;--peach:#ffa66e;--yellow:#ffde6c;--mint:#d6fae7;--line:#ead8ed;--panel:#fff;--scale:1;--sh:0 5px 0 #dec2d7}
 *{box-sizing:border-box}html,body{height:100%;margin:0;overflow:hidden;overscroll-behavior:none;-webkit-text-size-adjust:100%}
@@ -105,6 +105,19 @@ main{min-height:0;padding:4px clamp(12px,2.2vw,26px) 9px;overflow:hidden;display
 .dialog{background:#fffdfa;width:min(900px,94vw);max-height:calc(100dvh - 40px);border:3px solid #efc6de;border-radius:27px;padding:20px 24px;box-shadow:0 15px 0 #44295230;display:flex;flex-direction:column;gap:10px;overflow:auto}
 .dialog-head{display:flex;justify-content:space-between;align-items:center;gap:9px}.dialog h2{margin:0;font-size:28px}.dialog-close{border:2px solid #e3cfe3;border-radius:12px;background:#fff;padding:7px 17px;font-weight:900}
 .setting-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.sound-tuning{border:2px solid #e7d9ef;background:linear-gradient(110deg,#fffefa,#f8f2ff);border-radius:16px;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.sound-tuning-title{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.sound-tuning-title strong{font-size:17px;color:#523370}
+.sound-tuning-title span{font-size:13px;color:#756c86;font-weight:750}
+.sound-controls{display:flex;align-items:center;justify-content:space-between;gap:9px;flex-wrap:wrap}
+.sound-levels{display:flex;flex:1 1 285px;gap:6px}
+.sound-levels button{flex:1;min-width:0;min-height:38px;padding:4px 8px;border-radius:10px;border:2px solid #e3d5ec;background:white;font-size:15px;font-weight:850;white-space:nowrap}
+.sound-levels button.selected{background:#efe4ff;border-color:#986ce1;color:#633b98;box-shadow:inset 0 0 0 1px #fff}
+.sound-previews{display:flex;gap:6px;flex:1 1 195px}
+.sound-previews button{flex:1;min-height:38px;padding:4px 9px;border-radius:10px;border:2px solid #e6cee1;background:#fff8fc;color:#67437d;font-size:14px;font-weight:850;white-space:nowrap}
+.sound-previews button:disabled{opacity:.4;cursor:not-allowed}
+@media(max-width:620px){.sound-tuning-title span{display:none}.sound-controls{flex-direction:column;align-items:stretch}.sound-levels,.sound-previews{flex:auto}}
+
 .setting-tile{border:2px solid #e8d8eb;border-radius:15px;background:#faf7ff;text-align:left;min-height:66px;padding:9px 12px;display:flex;flex-direction:column;align-items:flex-start}
 .setting-tile .desc{font-size:14px;color:#7d708d;font-weight:700}.setting-tile .status{color:#8b51cc;font-size:14px;font-weight:950;margin-top:2px}
 .size-row{display:flex;gap:8px}.size-choice{flex:1;padding:8px 13px;border:2px solid #e5d5e9;border-radius:12px;background:#fff;font-weight:850}.size-choice.chosen{background:#ffe4ef;border-color:#ff9ebc}
@@ -602,6 +615,13 @@ main{padding:7px clamp(10px,1.6vw,20px) 8px!important}
   <div class="dialog-head"><h2 id="settingsTitle">⚙ 设置</h2><button class="dialog-close tap" data-close="settingsOverlay">完成</button></div>
   <div class="font-setting-label"><strong>字体大小</strong><small>重点调整练习汉字、拼音和双拼键帽</small></div><div class="size-row" id="fontOptions" role="group" aria-label="练习字号"></div>
   <div class="setting-grid" id="settingOptions"></div>
+  <div class="sound-tuning" id="soundTuning" aria-label="声音音量及试听">
+   <div class="sound-tuning-title"><strong>🔔 音效大小</strong><span>柔和木琴音 · 可直接试听</span></div>
+   <div class="sound-controls">
+    <div class="sound-levels" id="soundLevels" role="group" aria-label="声音大小"></div>
+    <div class="sound-previews"><button type="button" class="tap" data-preview="ok">♪ 试听按键</button><button type="button" class="tap" data-preview="win">♫ 试听完成</button></div>
+   </div>
+  </div>
   <button type="button" class="backup-entry tap" id="openBackup" aria-label="备份或恢复练习记录"><span>📦 备份 / 恢复练习记录</span><span>离线长期保存 →</span></button>
   <div class="help">设置自动保存在本机。按键音可随时关闭；所有练习都不计时。建议定期备份练习记录。</div>
 </div></div>
@@ -745,20 +765,87 @@ function playable(text,py){
 }
 const $=id=>document.getElementById(id);
 const main=$('main'),dock=$('dock'),keyboard=$('keyboard');
-const state={mode:'home',font:'large',hints:true,breakdown:true,labels:true,sounds:true,rewards:true,folded:false,items:[],item:0,current:null,tokens:[],index:0,typed:'',win:false,message:'按亮起的键开始练习',messageType:'',pickPage:0,celebrate:false,sourceTitle:'',completedSections:[],wordHistory:[],wordHistoryLastId:null,replayTouched:false};
+const state={mode:'home',font:'large',hints:true,breakdown:true,labels:true,sounds:true,soundLevel:'loud',rewards:true,folded:false,items:[],item:0,current:null,tokens:[],index:0,typed:'',win:false,message:'按亮起的键开始练习',messageType:'',pickPage:0,celebrate:false,sourceTitle:'',completedSections:[],wordHistory:[],wordHistoryLastId:null,replayTouched:false};
 try{const old=JSON.parse(localStorage.getItem(WORD_HISTORY_KEY)||'[]');if(Array.isArray(old))state.wordHistory=old.slice(-90);}catch(e){}
 try{
  const saved=JSON.parse(localStorage.getItem('xiaohe-v4-settings')||'{}');
- for(const k of ['font','hints','breakdown','labels','sounds','rewards'])if(Object.hasOwn(saved,k))state[k]=saved[k];
+ for(const k of ['font','hints','breakdown','labels','sounds','soundLevel','rewards'])if(Object.hasOwn(saved,k))state[k]=saved[k];
 }catch(e){}
-function saveSettings(){try{localStorage.setItem('xiaohe-v4-settings',JSON.stringify(Object.fromEntries(['font','hints','breakdown','labels','sounds','rewards'].map(k=>[k,state[k]]))));}catch(e){}}
+function saveSettings(){try{localStorage.setItem('xiaohe-v4-settings',JSON.stringify(Object.fromEntries(['font','hints','breakdown','labels','sounds','soundLevel','rewards'].map(k=>[k,state[k]]))));}catch(e){}}
 function esc(s){return String(s??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));}
-let audio=null;
-function beep(freq,dur=.052,vol=.028,delay=0){
- if(!state.sounds)return;
- try{const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return;if(!audio)audio=new AC();if(audio.state==='suspended')audio.resume();const t=audio.currentTime+delay;const o=audio.createOscillator(),g=audio.createGain();o.type='triangle';o.frequency.setValueAtTime(freq,t);g.gain.setValueAtTime(.0001,t);g.gain.exponentialRampToValueAtTime(vol,t+.009);g.gain.exponentialRampToValueAtTime(.0001,t+dur);o.connect(g);g.connect(audio.destination);o.start(t);o.stop(t+dur+.01);}catch(e){}
+let audio=null, audioMaster=null;
+const SOUND_LEVELS={soft:.36,normal:.67,loud:1.0};
+// Web Audio sounds are generated locally: no external audio files, downloads or tracking.
+function getAudio(){
+ if(!state.sounds)return null;
+ try{
+  const AC=window.AudioContext||window.webkitAudioContext;
+  if(!AC)return null;
+  if(!audio){
+   audio=new AC();
+   audioMaster=audio.createGain();
+   const compressor=audio.createDynamicsCompressor();
+   compressor.threshold.value=-13;
+   compressor.knee.value=14;
+   compressor.ratio.value=3.2;
+   compressor.attack.value=.004;
+   compressor.release.value=.17;
+   audioMaster.connect(compressor);
+   compressor.connect(audio.destination);
+   // A very quiet, single room reflection softens sharp digital edges.
+   const echo=audio.createDelay(.22),echoVol=audio.createGain();
+   echo.delayTime.value=.102;
+   echoVol.gain.value=.075;
+   audioMaster.connect(echo);
+   echo.connect(echoVol);
+   echoVol.connect(compressor);
+  }
+  const level=SOUND_LEVELS[state.soundLevel]??SOUND_LEVELS.loud;
+  audioMaster.gain.setTargetAtTime(level,audio.currentTime,.012);
+  if(audio.state==='suspended')audio.resume().catch(()=>{});
+  return audio;
+ }catch(e){return null;}
 }
-function play(kind){if(kind==='ok')beep(490,.05,.031);else if(kind==='letter'){beep(540,.05,.027);beep(690,.095,.07,.022);}else if(kind==='win'){beep(530,.1,.036);beep(670,.13,.038,.11);beep(830,.18,.045,.22);}else if(kind==='bad')beep(255,.08,.018);else beep(380,.04,.020);}
+function mallet(freq,delay=0,duration=.27,strength=.26){
+ const ctx=getAudio();if(!ctx)return;
+ try{
+  const start=ctx.currentTime+Math.max(0,delay)+.008;
+  const end=start+Math.max(.11,duration);
+  const low=ctx.createOscillator(),high=ctx.createOscillator();
+  const body=ctx.createGain(),sparkle=ctx.createGain();
+  low.type='sine';high.type='sine';
+  low.frequency.setValueAtTime(freq*1.004,start);
+  low.frequency.exponentialRampToValueAtTime(freq,start+.045);
+  high.frequency.setValueAtTime(freq*2.005,start);
+  body.gain.setValueAtTime(.0001,start);
+  body.gain.linearRampToValueAtTime(strength,start+.012);
+  body.gain.exponentialRampToValueAtTime(strength*.38,start+.095);
+  body.gain.exponentialRampToValueAtTime(.0001,end);
+  sparkle.gain.setValueAtTime(.0001,start);
+  sparkle.gain.linearRampToValueAtTime(strength*.14,start+.006);
+  sparkle.gain.exponentialRampToValueAtTime(.0001,start+Math.min(duration*.6,.16));
+  low.connect(body);high.connect(sparkle);
+  body.connect(audioMaster);sparkle.connect(audioMaster);
+  low.start(start);high.start(start);
+  low.stop(end+.01);high.stop(start+Math.min(duration*.6,.16)+.01);
+  low.onended=()=>{low.disconnect();high.disconnect();body.disconnect();sparkle.disconnect();};
+ }catch(e){}
+}
+function play(kind){
+ if(!state.sounds)return;
+ // Pleasant pentatonic notes; each action is recognizable without a piercing alarm.
+ if(kind==='ok')mallet(659.25,0,.17,.21);
+ else if(kind==='letter'){
+  mallet(659.25,0,.22,.20);
+  mallet(880,.094,.30,.23);
+ }else if(kind==='win'){
+  mallet(523.25,0,.34,.22);
+  mallet(659.25,.12,.35,.24);
+  mallet(783.99,.24,.40,.24);
+  mallet(1046.5,.38,.58,.28);
+ }else if(kind==='bad')mallet(293.66,0,.18,.19);
+ else mallet(783.99,0,.12,.14);
+}
 let toastTimer=null;
 function toast(s){const t=$('toast');t.textContent=s;t.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),1350);}
 function nextKey(){const t=state.tokens[state.index];return t?t.code[state.typed.length]:'';}
@@ -877,12 +964,12 @@ function typeLetter(letter){
   state.replayTouched=true;
   upsertArticleRecord('inprogress');
  }
- state.typed+=letter;play('ok');
+ state.typed+=letter;
  if(state.typed.length===2){
    const finished=t.han;state.index++;state.typed='';
    if(state.index>=state.tokens.length){state.win=true;markCompletedSection();state.celebrate=state.rewards;state.message=state.rewards?'⭐ 太棒了，整段都打完啦！':'✓ 整段已经完成。';state.messageType='win';play('win');}
    else{state.message='✓ “'+finished+'” 已记录，继续下一个字！';state.messageType='good';play('letter');}
- }else{state.message='第一键正确，再点第二键。';state.messageType='good';}
+ }else{state.message='第一键正确，再点第二键。';state.messageType='good';play('ok');}
  saveProgress();renderProgress();
 }
 function pressFlash(letter,ok){const el=keyboard.querySelector('[data-key="'+letter+'"]');if(!el)return;el.classList.add(ok?'correct':'wrong');setTimeout(()=>el.classList.remove('correct','wrong'),200);}
@@ -1118,7 +1205,9 @@ function render(){
 }
 function renderSettings(){
  $('fontOptions').innerHTML=[['normal','标准','清晰日常'],['large','大','舒适醒目'],['xlarge','超大','重点放大']].map(([key,title,subtitle])=>`<button type="button" class="size-choice tap ${state.font===key?'chosen':''}" data-font="${key}" aria-pressed="${state.font===key}" aria-label="${title}字号，${subtitle}"><span class="font-glyph font-${key}" aria-hidden="true">字</span><span class="font-copy"><strong>${title}</strong><small>${subtitle}</small></span><span class="font-check" aria-hidden="true">✓</span></button>`).join('');
- $('settingOptions').innerHTML=[['hints','提示高亮','金黄色提示下一步按键'],['breakdown','详细说明','分别解释第一键和第二键'],['labels','完整键帽标记','每个键显示声母及韵母'],['sounds','按键声音','轻按声、正确音、完成音'],['rewards','奖励反馈','字完成显示确认及星星']].map(([key,title,desc])=>`<button class="setting-tile tap" data-setting="${key}" aria-pressed="${state[key]}"><b>${title}</b><span class="desc">${desc}</span><span class="status">${state[key]?'● 已开启':'○ 已关闭'}</span></button>`).join('');
+ $('settingOptions').innerHTML=[['hints','提示高亮','金黄色提示下一步按键'],['breakdown','详细说明','分别解释第一键和第二键'],['labels','完整键帽标记','每个键显示声母及韵母'],['sounds','按键声音','柔和木琴音：按键、完成、错误提示'],['rewards','奖励反馈','字完成显示确认及星星']].map(([key,title,desc])=>`<button class="setting-tile tap" data-setting="${key}" aria-pressed="${state[key]}"><b>${title}</b><span class="desc">${desc}</span><span class="status">${state[key]?'● 已开启':'○ 已关闭'}</span></button>`).join('');
+ $('soundLevels').innerHTML=[['soft','轻柔'],['normal','适中'],['loud','响亮']].map(([key,title])=>`<button type="button" class="tap ${state.soundLevel===key?'selected':''}" data-volume="${key}" aria-pressed="${state.soundLevel===key}">${title}</button>`).join('');
+ document.querySelectorAll('[data-preview]').forEach(b=>{b.disabled=!state.sounds;});
 }
 function openOverlay(id){play('control');const el=$(id);el.classList.add('open');el.setAttribute('aria-hidden','false');}
 function closeOverlay(id){play('control');const el=$(id);el.classList.remove('open');el.setAttribute('aria-hidden','true');}
@@ -1127,6 +1216,8 @@ document.addEventListener('click',e=>{
  const mode=e.target.closest('[data-start]');if(mode){setMode(mode.dataset.start);return;}
  const open=e.target.closest('[data-open]');if(open){showPicker(open.dataset.open);return;}
  const nav=e.target.closest('[data-nav]');if(nav){if(nav.dataset.nav==='word')setMode('word');else showPicker(nav.dataset.nav);return;}
+ const volume=e.target.closest('[data-volume]');if(volume){state.soundLevel=volume.dataset.volume;saveSettings();renderSettings();play('control');return;}
+ const preview=e.target.closest('[data-preview]');if(preview){play(preview.dataset.preview);return;}
  const setting=e.target.closest('[data-setting]');if(setting){const k=setting.dataset.setting;state[k]=!state[k];saveSettings();play('control');renderSettings();if(state.current)renderProgress();if(k==='labels')renderKeyboard();return;}
  const font=e.target.closest('[data-font]');if(font){state.font=font.dataset.font;saveSettings();play('control');applyFontPreset();renderSettings();return;}
  const close=e.target.closest('[data-close]');if(close){closeOverlay(close.dataset.close);return;}
